@@ -1,10 +1,12 @@
+"""Podhawk allows you to keep image and container up-to-date."""
 from json import loads
-from subprocess import check_output, run, PIPE, STDOUT
+from subprocess import PIPE, STDOUT, check_output, run
 from sys import exit
 from typing import List
 
 
 def remove_old_container(old_ctn_id):
+    """Remove old container."""
     print(f'Removing old container {old_ctn_id}')
     remove = run(['podman', 'rm', old_ctn_id],
                  capture_output=True).stdout.decode('utf-8')
@@ -12,6 +14,7 @@ def remove_old_container(old_ctn_id):
 
 
 def post_healthcheck(old_ctn_id, new_ctn_id, status):
+    """After healthcheck, take the right decision."""
     if 'NA' in status:
         print('No healthcheck defined in this image… '
               'We continue at your own risk')
@@ -21,8 +24,8 @@ def post_healthcheck(old_ctn_id, new_ctn_id, status):
         remove_old_container(old_ctn_id)
     else:
         print(f'Healthcheck failed, restarting old container {old_ctn_id}')
-        print("New container forced to stop and not removed "
-              "to permit you to analyze logs")
+        print('New container forced to stop and not removed '
+              'to permit you to analyze logs')
         run(['podman', 'stop', new_ctn_id])
         start_old = run(['podman', 'start', old_ctn_id],
                         capture_output=True).stdout.decode('utf-8')
@@ -30,9 +33,8 @@ def post_healthcheck(old_ctn_id, new_ctn_id, status):
 
 
 def health_check(container_id):
-    """
-    Analyze healthcheck status (3 times) and return the value
-    needed by post_healthcheck
+    """Analyze healthcheck status and return value needed by post_healthcheck.
+
     Args:
         container_id (str): new container id
 
@@ -54,8 +56,7 @@ def health_check(container_id):
 
 
 def recreate_container(containers_data):
-    """
-    execute commands included in data to recreate containers
+    """Execute commands included in data to recreate containers.
 
     Args:
         containers_data (list): informations to recreate containers
@@ -73,8 +74,8 @@ def recreate_container(containers_data):
                        capture_output=True).stdout.decode('utf-8')
         print(f'Stopping … {stop_old}')
 
-        print(f'Starting new container …')
-        start_new = check_output(f"podman run -d {new_ctn_cli}",
+        print('Starting new container …')
+        start_new = check_output(f'podman run -d {new_ctn_cli}',
                                  stderr=STDOUT, shell=True).decode('utf-8')
         print(f'Starting … {start_new}')
 
@@ -86,8 +87,7 @@ def recreate_container(containers_data):
 
 
 def format_envs_cli(envs_data):
-    """
-    return command line for environment variables
+    """Return command line for environment variables.
 
     Args:
         envs_data (list): from inspect_container
@@ -109,8 +109,7 @@ def format_envs_cli(envs_data):
 
 
 def format_network_ports_cli(network_data):
-    """
-    return command line for network ports
+    """Return command line for network ports.
 
     Args:
         network_data (list): from inspect_container
@@ -122,18 +121,17 @@ def format_network_ports_cli(network_data):
         network_ports_pre_cli: List[str] = []
         for port in network_data:
             network_ports_pre_cli.append(
-                f'''-p {port['hostIP']}:{port['hostPort']}:{
-                port['containerPort']}''') if len(
+                f"""-p {port['hostIP']}:{port['hostPort']}:{
+                port['containerPort']}""") if len(
                 port['hostIP']) > 0 else network_ports_pre_cli.append(
-                f'''-p {port['hostPort']}:{port['containerPort']}''')
+                f"-p {port['hostPort']}:{port['containerPort']}")
         return ' '.join(network_ports_pre_cli)
     else:
         return ''
 
 
 def format_mounts_cli(mounts_data):
-    """
-    return command line for mounts
+    """Return command line for mounts.
 
     Args:
         mounts_data (list): from inspect_container
@@ -141,13 +139,12 @@ def format_mounts_cli(mounts_data):
     Returns:
         The command line needed otherwise blank line
     """
-    return ' '.join([f'''-v {mount['Source']}:{mount['Destination']}'''
+    return ' '.join([f"-v {mount['Source']}:{mount['Destination']}"
                      for mount in mounts_data]) if len(mounts_data) > 0 else ''
 
 
 def format_restart_cli(restart_data):
-    """
-    return command line for restart policy
+    """Return command line for restart policy.
 
     Args:
         restart_data (list): from inspect_container
@@ -155,13 +152,12 @@ def format_restart_cli(restart_data):
     Returns:
         The command line needed otherwise blank line
     """
-    return f'''--restart={restart_data['Name']}''' if len(
+    return f"--restart={restart_data['Name']}" if len(
         restart_data['Name']) > 0 else ''
 
 
 def inspect_container(containers_list):
-    """
-    inspect each container and rebuild CLI to recreate each container
+    """Inspect each container and rebuild CLI to recreate each container.
 
     Args:
         containers_list (list): list of running containers
@@ -194,13 +190,14 @@ def inspect_container(containers_list):
 
 
 def ctn_img_do(data):
+    """Take container list and start the process about inspect and recreate."""
     print('Inspecting running containers:')
     to_recreate_cli: List[tuple] = inspect_container(data)
     recreate_container(to_recreate_cli)
 
 
 def containers_to_recreate(containers_list, images_updated):
-    """return which containers are to recreate
+    """Return which containers are to recreate.
 
     Args:
         containers_list (list): list running containers
@@ -214,8 +211,7 @@ def containers_to_recreate(containers_list, images_updated):
 
 
 def update_img(data):
-    """update image using podman pull and if updated append it to
-    global var to recreate containers
+    """Update image and if updated append it to the list to recreate containers.
 
     Args:
         data (list): image id, name and tag
@@ -236,8 +232,7 @@ def update_img(data):
 
 
 def identify_img_name_tag(data):
-    """extract image name with tag from podman images (json) and
-    append it to global var for later use
+    """Extract image name with tag and append to the list.
 
     Args:
         data (list): json from podman images
@@ -247,8 +242,7 @@ def identify_img_name_tag(data):
 
 
 def prepare_containers_list(data):
-    """prepare global var used to recreate running container when
-    image's updated
+    """Prepare list used to recreate running container when image is updated.
 
     Args:
         data (list): json from podman ps
@@ -258,32 +252,27 @@ def prepare_containers_list(data):
 
 
 def images() -> List[tuple]:
-    """
-    Gathering information about images
-    """
+    """Gathering information about images."""
     images_output = run(['podman', 'images', '--format', 'json'],
                         capture_output=True).stdout.decode('utf-8')
     return identify_img_name_tag(loads(images_output))
 
 
 def ps() -> List[tuple]:
-    """
-    Gathering information about running containers
-    """
+    """Gathering information about running containers."""
     ps_output = run(['podman', 'ps', '--format', 'json'],
                     capture_output=True).stdout.decode('utf-8')
     return prepare_containers_list(loads(ps_output))
 
 
 def exitwmsg(msg):
+    """Avoid duplicate code about printing message and exit program."""
     print(msg)
     exit(0)
 
 
 def main():
-    """
-    Executed only when run as a script
-    """
+    """Only used when run as a script."""
     print('Gathering information about running containers')
     ctn_list = ps()
     l_ctn_list = len(ctn_list)
@@ -302,5 +291,5 @@ def main():
                ) if l_ctn_list else exitwmsg('No container found')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
